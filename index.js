@@ -102,9 +102,20 @@ async function enviarANotion(telefono, grupo) {
         ]
       },
       "Telefono": { number: telefonoNumero },  // Enviar como número
-      "Grupo Whatsapp": { select: { name: grupo } }
+      "Grupo Whatsapp": { select: { name: grupo } },
+
+
+      "Metricas": {  // Aquí agregas la relación con la base de datos "Métricas Totales"
+        relation: [
+          {
+            id: "11b760f166c0804f822cde15701c1874"  // El ID del item en la base de datos "Métricas Totales"
+          }
+        ]
+      }
     }
   };
+    
+  
 
   try {
     const headers = {
