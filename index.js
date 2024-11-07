@@ -116,7 +116,7 @@ async function enviarANotion(telefono, grupo) {
       "Metricas": {  // Aquí agregas la relación con la base de datos "Métricas Totales"
         relation: [
           {
-            id: "11b760f166c0804f822cde15701c1874"
+            id: "128032a6236581f59b7bf8993198b037"  
           }
         ]
       }
