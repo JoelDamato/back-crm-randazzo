@@ -90,7 +90,7 @@ async function enviarANotion(telefono, grupo) {
   }
 
   const body = {
-    parent: { database_id: "11b760f166c0819abc9dfdd6a51ba241" },
+    parent: { database_id: "128032a62365817cb2aef2c4c2b20179" },
     properties: {
       "Nombre": {
         title: [
