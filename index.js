@@ -36,8 +36,15 @@ function parseCSV(buffer) {
 }
 
 function cleanPhoneNumber(phone) {
-  // Eliminar todos los caracteres no numéricos
-  const cleaned = phone.replace(/\D/g, '');
+  // Eliminar todos los caracteres excepto números y el símbolo +
+  let cleaned = phone.replace(/[^0-9+]/g, '');
+
+  // Asegurarse de que el número empiece con +
+  if (!cleaned.startsWith('+')) {
+    // Si no tiene un prefijo +, agregamos +52 (México como ejemplo, ajusta según tu necesidad)
+    cleaned = `+${cleaned}`;
+  }
+
   console.log(`Número original: "${phone}", Número limpio: "${cleaned}"`);
   return cleaned;
 }
@@ -59,7 +66,7 @@ async function obtenerNumerosExistentesEnNotion() {
     // Convertir todos los números de Notion a cadenas de texto para su comparación
     const numerosExistentes = data
       .map((entry) => {
-        const telefono = entry.properties['Telefono']?.number;
+        const telefono = entry.properties['Telefono']?.phone_number;
         return telefono ? telefono.toString() : null;  // Convertir números a string para comparar
       })
       .filter(Boolean);  // Asegurarse de no incluir valores undefined o null
@@ -83,12 +90,6 @@ async function enviarANotion(telefono, grupo) {
     return false;
   }
 
-  const telefonoNumero = parseInt(telefonoLimpio, 10);  // Convertir a número
-  if (isNaN(telefonoNumero)) {
-    console.error('No se pudo convertir el teléfono a número:', telefonoLimpio);
-    return false;
-  }
-
   const body = {
     parent: { database_id: "128032a62365817cb2aef2c4c2b20179" },
     properties: {
@@ -101,10 +102,10 @@ async function enviarANotion(telefono, grupo) {
           }
         ]
       },
-      "Telefono": { number: telefonoNumero },  // Enviar como número
+      "Telefono": { 
+        phone_number: telefonoLimpio  // Enviar como phone_number en formato string
+      },
       "Grupo Whatsapp": { select: { name: grupo } },
-
-
       "Metricas": {  // Aquí agregas la relación con la base de datos "Métricas Totales"
         relation: [
           {
@@ -114,8 +115,6 @@ async function enviarANotion(telefono, grupo) {
       }
     }
   };
-    
-  
 
   try {
     const headers = {
@@ -125,7 +124,7 @@ async function enviarANotion(telefono, grupo) {
     };
     const response = await axios.post(url, body, { headers });
     console.log('Respuesta de Notion:', response.status, response.statusText);
-    console.log('Dato cargado correctamente:', telefonoNumero);
+    console.log('Dato cargado correctamente:', telefonoLimpio);
     return true;
   } catch (error) {
     console.error('Error cargando a Notion:', error.response?.data || error.message);
