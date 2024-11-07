@@ -87,7 +87,7 @@ async function obtenerNumerosExistentesEnNotion() {
   }
 }
 
-async function enviarANotion(telefono, grupo) {
+async function enviarANotion(telefono, grupo, retries = 3) {
   console.log(`Intentando enviar a Notion. Teléfono: ${telefono}, Grupo: ${grupo}`);
   const url = 'https://api.notion.com/v1/pages';
 
@@ -113,10 +113,10 @@ async function enviarANotion(telefono, grupo) {
         phone_number: telefonoLimpio  // Enviar como phone_number en formato string
       },
       "Grupo Whatsapp": { select: { name: grupo } },
-      "Metricas": {  // Aquí agregas la relación con la base de datos "Métricas Totales"
+      "Metricas": {  // Relacionar con el ítem específico en la base de datos "Métricas Totales"
         relation: [
           {
-            id: "128032a6236581f59b7bf8993198b037"  
+            id: "128032a6236581f59b7bf8993198b037"  // ID del item en la base de datos "Métricas Totales"
           }
         ]
       }
@@ -134,8 +134,14 @@ async function enviarANotion(telefono, grupo) {
     console.log('Dato cargado correctamente:', telefonoLimpio);
     return true;
   } catch (error) {
-    console.error('Error cargando a Notion:', error.response?.data || error.message);
-    return false;
+    if (error.response?.status === 409 && retries > 0) {
+      console.error('Conflicto al guardar en Notion. Reintentando...');
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar 1 segundo antes de reintentar
+      return enviarANotion(telefono, grupo, retries - 1);
+    } else {
+      console.error('Error cargando a Notion:', error.response?.data || error.message);
+      return false;
+    }
   }
 }
 
@@ -173,19 +179,17 @@ app.post('/upload-file', upload.single('file'), async (req, res) => {
       return telefonoLimpio && !numerosExistentes.includes(telefonoLimpio);
     });
 
-    const promesasEnvio = numerosFiltrados.map((row) => {
+    let successCount = 0;
+    for (const row of numerosFiltrados) {
       const telefono = row.telefono || row.Telefono || row.TELEFONO;
       if (telefono) {
         console.log('Procesando teléfono:', telefono);
-        return enviarANotion(telefono, grupo);
+        const success = await enviarANotion(telefono, grupo);
+        if (success) successCount++;
       } else {
         console.error('Fila sin número de teléfono:', row);
-        return Promise.resolve(false);
       }
-    });
-
-    const resultados = await Promise.all(promesasEnvio);
-    const successCount = resultados.filter(result => result).length;
+    }
 
     console.log(`Proceso completado. ${successCount} números enviados a Notion`);
     res.status(200).send(`Archivo procesado. ${successCount} números enviados a Notion`);
