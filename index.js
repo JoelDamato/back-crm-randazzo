@@ -12,6 +12,9 @@ app.use(cors());
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
+// Token de Notion (directamente en el script)
+const token = 'Bearer ntn_GG849748837abCQnsctJHEtwe9JNDxoKbjkD61zGuqO02D';
+
 function parseCSV(buffer) {
   return new Promise((resolve, reject) => {
     const results = [];
@@ -41,8 +44,14 @@ function cleanPhoneNumber(phone) {
 
   // Asegurarse de que el número empiece con +
   if (!cleaned.startsWith('+')) {
-    // Si no tiene un prefijo +, agregamos +52 (México como ejemplo, ajusta según tu necesidad)
     cleaned = `+${cleaned}`;
+  }
+
+  // Validar el formato internacional del número
+  const validFormat = /^\+\d{10,15}$/;
+  if (!validFormat.test(cleaned)) {
+    console.error(`Número de teléfono no válido después de limpiar: "${cleaned}"`);
+    return null;
   }
 
   console.log(`Número original: "${phone}", Número limpio: "${cleaned}"`);
@@ -51,7 +60,6 @@ function cleanPhoneNumber(phone) {
 
 async function obtenerNumerosExistentesEnNotion() {
   const url = 'https://api.notion.com/v1/databases/128032a62365817cb2aef2c4c2b20179/query';
-  const token = 'Bearer ntn_GG849748837abCQnsctJHEtwe9JNDxoKbjkD61zGuqO02DS';
 
   const headers = {
     'Authorization': token,
@@ -60,16 +68,16 @@ async function obtenerNumerosExistentesEnNotion() {
   };
 
   try {
-    const response = await axios.post(url, {}, { headers });
+    const response = await axios.post(url, { page_size: 100 }, { headers });
     const data = response.data.results;
 
     // Convertir todos los números de Notion a cadenas de texto para su comparación
     const numerosExistentes = data
       .map((entry) => {
         const telefono = entry.properties['Telefono']?.phone_number;
-        return telefono ? telefono.toString() : null;  // Convertir números a string para comparar
+        return telefono ? telefono.toString() : null;
       })
-      .filter(Boolean);  // Asegurarse de no incluir valores undefined o null
+      .filter(Boolean);
 
     console.log('Números ya existentes en Notion (limpios):', numerosExistentes);
     return numerosExistentes;
@@ -82,7 +90,6 @@ async function obtenerNumerosExistentesEnNotion() {
 async function enviarANotion(telefono, grupo) {
   console.log(`Intentando enviar a Notion. Teléfono: ${telefono}, Grupo: ${grupo}`);
   const url = 'https://api.notion.com/v1/pages';
-  const token = 'Bearer ntn_GG849748837abCQnsctJHEtwe9JNDxoKbjkD61zGuqO02D';
 
   const telefonoLimpio = cleanPhoneNumber(telefono);
   if (!telefonoLimpio) {
@@ -109,7 +116,7 @@ async function enviarANotion(telefono, grupo) {
       "Metricas": {  // Aquí agregas la relación con la base de datos "Métricas Totales"
         relation: [
           {
-            id: "11b760f166c0804f822cde15701c1874"  // El ID del item en la base de datos "Métricas Totales"
+            id: "11b760f166c0804f822cde15701c1874"
           }
         ]
       }
@@ -159,22 +166,26 @@ app.post('/upload-file', upload.single('file'), async (req, res) => {
 
     // Filtrar los números que ya existen en Notion para no reenviarlos
     const numerosFiltrados = data.filter((row) => {
-      const telefono = row.telefono || row.Telefono || row.TELEFONO;
-      const telefonoLimpio = cleanPhoneNumber(telefono);
+      const keys = Object.keys(row).map(key => key.toLowerCase());
+      const telefonoKey = keys.find(key => key.includes('telefono'));
+      const telefono = telefonoKey ? row[telefonoKey] : null;
+      const telefonoLimpio = telefono ? cleanPhoneNumber(telefono) : null;
       return telefonoLimpio && !numerosExistentes.includes(telefonoLimpio);
     });
 
-    let successCount = 0;
-    for (const row of numerosFiltrados) {
+    const promesasEnvio = numerosFiltrados.map((row) => {
       const telefono = row.telefono || row.Telefono || row.TELEFONO;
       if (telefono) {
         console.log('Procesando teléfono:', telefono);
-        const success = await enviarANotion(telefono, grupo);
-        if (success) successCount++;
+        return enviarANotion(telefono, grupo);
       } else {
         console.error('Fila sin número de teléfono:', row);
+        return Promise.resolve(false);
       }
-    }
+    });
+
+    const resultados = await Promise.all(promesasEnvio);
+    const successCount = resultados.filter(result => result).length;
 
     console.log(`Proceso completado. ${successCount} números enviados a Notion`);
     res.status(200).send(`Archivo procesado. ${successCount} números enviados a Notion`);
