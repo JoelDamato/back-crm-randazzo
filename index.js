@@ -43,8 +43,8 @@ function cleanPhoneNumber(phone) {
 }
 
 async function obtenerNumerosExistentesEnNotion() {
-  const url = 'https://api.notion.com/v1/databases/11b760f166c0819abc9dfdd6a51ba241/query';
-  const token = 'Bearer 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';
+  const url = 'https://api.notion.com/v1/databases/128032a62365817cb2aef2c4c2b20179/query';
+  const token = 'Bearer ntn_GG849748837abCQnsctJHEtwe9JNDxoKbjkD61zGuqO02DS';
 
   const headers = {
     'Authorization': token,
@@ -75,7 +75,7 @@ async function obtenerNumerosExistentesEnNotion() {
 async function enviarANotion(telefono, grupo) {
   console.log(`Intentando enviar a Notion. Teléfono: ${telefono}, Grupo: ${grupo}`);
   const url = 'https://api.notion.com/v1/pages';
-  const token = 'Bearer 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';
+  const token = 'Bearer ntn_GG849748837abCQnsctJHEtwe9JNDxoKbjkD61zGuqO02D';
 
   const telefonoLimpio = cleanPhoneNumber(telefono);
   if (!telefonoLimpio) {
