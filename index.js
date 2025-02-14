@@ -19,6 +19,7 @@ const databaseId = "14e482517a9581458d4bfefbcde4ea03";
 const interacciones_database_id = "14e482517a9581cbbfa7e9fc3dd61bae";
 const metrics_id = "14e482517a9581f1ba44c86043cf23a0";
 
+// Función para analizar el CSV
 function parseCSV(buffer) {
   return new Promise((resolve, reject) => {
     const results = [];
@@ -39,13 +40,49 @@ function parseCSV(buffer) {
   });
 }
 
+// Función para formatear números de teléfono
 function cleanPhoneNumber(phone) {
-  let cleaned = phone.replace(/[^0-9+]/g, '');
-  if (!cleaned.startsWith('+')) cleaned = `+${cleaned}`;
-  const validFormat = /^\+\d{10,15}$/;
+  if (!phone) return null;
+  
+  let cleaned = phone.replace(/[^0-9+]/g, ''); // Quitar caracteres no numéricos
+  
+  if (!cleaned.startsWith('+')) cleaned = `+${cleaned}`; // Asegurar prefijo +
+  
+  const validFormat = /^\+\d{10,15}$/; // Validar formato internacional
+  
   return validFormat.test(cleaned) ? cleaned : null;
 }
 
+// Función para obtener y formatear todos los teléfonos existentes en Notion
+async function obtenerTelefonosExistentes() {
+  const url = `${notionAPIBase}/databases/${databaseId}/query`;
+
+  try {
+    const response = await axios.post(url, {}, {
+      headers: {
+        Authorization: token,
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json"
+      }
+    });
+
+    // Extraer y formatear los números de teléfono existentes en Notion
+    const telefonosExistentes = new Set(
+      response.data.results
+        .map(item => item.properties.Telefono?.phone_number)
+        .filter(Boolean)
+        .map(cleanPhoneNumber) // Formatear los números antes de guardar en el Set
+    );
+
+    return telefonosExistentes;
+
+  } catch (error) {
+    console.error("Error obteniendo teléfonos de Notion:", error.response?.data);
+    return new Set(); // Devolver un Set vacío en caso de error
+  }
+}
+
+// Función para crear un cliente en Notion
 async function crearCliente(full_name, telefono, instagram, grupo, closer) {
   const closerName = Array.isArray(closer) ? closer[0] : closer;
 
@@ -77,6 +114,7 @@ async function crearCliente(full_name, telefono, instagram, grupo, closer) {
   }
 }
 
+// Función para registrar una interacción en Notion
 async function crearInteraccion(clienteId, full_name, closer) {
   const closerName = Array.isArray(closer) ? closer[0] : closer;
   const url = `${notionAPIBase}/pages`;
@@ -105,6 +143,7 @@ async function crearInteraccion(clienteId, full_name, closer) {
   }
 }
 
+// Ruta para subir el archivo CSV
 app.post("/upload-file", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).send("No se subió ningún archivo");
 
@@ -113,6 +152,7 @@ app.post("/upload-file", upload.single("file"), async (req, res) => {
   if (!grupo || !closer) return res.status(400).send("El nombre del grupo y el closer son obligatorios");
 
   try {
+    const telefonosExistentes = await obtenerTelefonosExistentes();
     const data = await parseCSV(req.file.buffer);
     if (data.length === 0) return res.status(400).send("El archivo no contiene datos");
 
@@ -123,12 +163,21 @@ app.post("/upload-file", upload.single("file"), async (req, res) => {
       }, {});
 
       const full_name = row[keys["nombre"]] || "Sin nombre";
-      const telefono = row[keys["telefono"]] || null;
+      let telefono = cleanPhoneNumber(row[keys["telefono"]]); // Se limpia el número
       const instagram = row[keys["instagram"]] || null;
 
+      // ✅ Si el número de teléfono existe, verifica duplicados.
+      // ✅ Si está vacío, lo deja pasar y lo crea igualmente.
+      if (telefono && telefonosExistentes.has(telefono)) {
+        console.log(`Lead con teléfono ${telefono} ya existe, omitiendo...`);
+        continue;
+      }
+
+      // Crear el cliente en Notion (Incluso si `telefono` es null)
       const clienteId = await crearCliente(full_name, telefono, instagram, grupo, closer);
       if (clienteId) {
         await crearInteraccion(clienteId, full_name, closer);
+        if (telefono) telefonosExistentes.add(telefono); // Agregar a la lista para evitar duplicados
       }
     }
     res.status(200).send("Archivo procesado correctamente.");
@@ -138,6 +187,8 @@ app.post("/upload-file", upload.single("file"), async (req, res) => {
   }
 });
 
+
+// Iniciar el servidor
 const PORT = 3000;
 app.listen(PORT, () => {
   console.error(`Servidor corriendo en http://localhost:${PORT}`);
