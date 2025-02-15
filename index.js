@@ -126,7 +126,7 @@ async function crearInteraccion(clienteId, full_name, closer) {
       "Tipo contacto": { select: { name: "Carga Masiva" } },
       Masiva: { select: { name: closerName } },
       "Metricas": { relation: [{ id: metrics_id }] },
-      "Estado interaccion": { select: { name: "Finalizada" } },
+      "Estado interaccion": { select: { name: "Pendiente" } },
     },
   };
 
